@@ -1,0 +1,11 @@
+.legal-page {
+  padding-top: 28px;
+  padding-bottom: 64px;
+  max-width: 760px;
+  display: grid;
+  gap: 16px;
+}
+
+.legal-page p {
+  color: var(--color-text-muted);
+}

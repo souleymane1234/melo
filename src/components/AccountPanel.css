@@ -1,0 +1,74 @@
+.profil-page__inner,
+.profil-page__gate {
+  display: grid;
+  gap: 16px;
+}
+
+.profil-page__gate {
+  justify-items: start;
+  max-width: 620px;
+}
+
+.profil-page__inner h2,
+.profil-page__gate h2 {
+  margin: 0;
+}
+
+.profil-page__inner > header p,
+.profil-page__gate p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+}
+
+.profil-page__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.profil-page__form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.profil-page__form input,
+.profil-page__form textarea {
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-background-secondary);
+  color: var(--color-text);
+}
+
+.profil-page__bio {
+  grid-column: 1 / -1;
+}
+
+.profil-page__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profil-page__status {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.profil-page__status--error {
+  color: var(--color-danger);
+}
+
+.profil-page__status--ok {
+  color: var(--color-success);
+}
+
+@media (max-width: 720px) {
+  .profil-page__form {
+    grid-template-columns: 1fr;
+  }
+}

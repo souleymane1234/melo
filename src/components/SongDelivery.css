@@ -1,0 +1,36 @@
+.song-delivery {
+  display: grid;
+  gap: 12px;
+}
+
+.song-delivery__status {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.song-delivery__status--sent {
+  color: var(--color-success);
+}
+
+.song-delivery__status--failed {
+  color: var(--color-danger);
+}
+
+.song-delivery__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.song-delivery--compact .song-delivery__status {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.song-delivery--compact .ui-btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}

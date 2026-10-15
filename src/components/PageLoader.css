@@ -1,0 +1,100 @@
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.page-loader--full {
+  min-height: min(70vh, 560px);
+  padding: 72px 24px;
+}
+
+.page-loader__orb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.page-loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  box-sizing: border-box;
+}
+
+.page-loader__ring--outer {
+  border-top-color: var(--color-primary);
+  border-right-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  animation: page-loader-spin 0.9s linear infinite;
+}
+
+.page-loader__ring--inner {
+  inset: 10px;
+  border-bottom-color: var(--color-secondary);
+  border-left-color: color-mix(in srgb, var(--color-secondary) 45%, transparent);
+  animation: page-loader-spin 1.25s linear infinite reverse;
+}
+
+.page-loader__core {
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-secondary)
+  );
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  animation: page-loader-pulse 1.4s ease-in-out infinite;
+}
+
+.page-loader__label {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+@keyframes page-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes page-loader-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loader__ring--outer,
+  .page-loader__ring--inner,
+  .page-loader__core {
+    animation: none;
+  }
+
+  .page-loader__ring--outer {
+    border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-top-color: var(--color-primary);
+  }
+
+  .page-loader__ring--inner {
+    border-color: color-mix(in srgb, var(--color-secondary) 35%, transparent);
+    border-bottom-color: var(--color-secondary);
+  }
+}

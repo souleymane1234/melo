@@ -1,0 +1,250 @@
+:root {
+  --color-primary: #9c4a56;
+  --color-primary-hover: #7f3a45;
+  --color-secondary: #9c4a56;
+  --color-accent: #c48992;
+  --color-dark: #3a2428;
+  --color-dark-secondary: #5c3a40;
+  --color-white: #ffffff;
+  --color-background: #f7f2ee;
+  --color-background-secondary: #efe6e1;
+  --color-surface: #ffffff;
+  --color-border: #e5d6d1;
+  --color-text: #3a2428;
+  --color-text-muted: #7a6468;
+  --color-success: #3f6b52;
+  --color-danger: #8b2e3a;
+
+  --cat-industry: #9c4a56;
+  --cat-mobility: #b56872;
+  --cat-digital: #8a404b;
+  --cat-agritech: #c48992;
+  --cat-creative: #7f3a45;
+
+  --gradient-brand: linear-gradient(180deg, #b05c68 0%, #9c4a56 100%);
+
+  --radius-btn: 999px;
+  --radius-input: 14px;
+  --radius-card: 20px;
+  --radius-media: 18px;
+  --radius-media-lg: 28px;
+  --radius-badge: 999px;
+  --radius-panel: 28px;
+
+  --shadow: 0 12px 32px rgb(58 36 40 / 0.07);
+  --shadow-hover: 0 18px 40px rgb(156 74 86 / 0.14);
+
+  --container: 1280px;
+  --container-pad: 24px;
+  --navbar-height: 132px;
+  --space-section: 12px;
+
+  --ease: 0.25s ease;
+
+  --text: var(--color-text-muted);
+  --text-h: var(--color-text);
+  --bg: var(--color-white);
+  --border: var(--color-border);
+  --code-bg: var(--color-background-secondary);
+  --accent: var(--color-primary);
+  --accent-bg: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  --social-bg: var(--color-background);
+  --ws-blue: var(--color-dark);
+  --ws-blue-deep: var(--color-dark-secondary);
+  --ws-orange: var(--color-primary);
+  --ws-green: var(--color-secondary);
+  --gold: var(--color-primary);
+  --gold-deep: var(--color-primary-hover);
+  --gold-light: var(--color-accent);
+  --gold-line: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  --gold-glow: color-mix(in srgb, var(--color-primary) 35%, transparent);
+
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Poppins', 'Montserrat', var(--sans);
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 16px/1.6 var(--sans);
+  letter-spacing: 0;
+  color-scheme: light;
+  color: var(--color-text);
+  background: var(--color-background);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --container-pad: 20px;
+    --navbar-height: 88px;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --container-pad: 16px;
+    --navbar-height: 64px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+#accueil,
+#actualites,
+#alertes,
+#play,
+#metiers,
+#competition,
+#concours,
+#edition,
+#partenariat,
+#contact,
+#chiffres,
+#inscriptions,
+#creer,
+#creations,
+#avantages,
+#comment-ca-marche,
+#avis,
+#occasions,
+#exemple,
+#faq {
+  scroll-margin-top: calc(var(--navbar-height) + 8px);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding-inline: 0;
+  text-align: center;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-x: clip;
+}
+
+html {
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  font-family: var(--sans);
+  color: var(--color-text);
+  background:
+    radial-gradient(900px 420px at 8% -8%, color-mix(in srgb, var(--color-primary) 9%, transparent), transparent 55%),
+    var(--color-background);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--heading);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 800;
+  margin: 0 0 12px;
+}
+
+h3 {
+  font-size: clamp(1.15rem, 1.8vw, 1.5rem);
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+h4 {
+  font-size: clamp(1.125rem, 1.6vw, 1.5rem);
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--color-background-secondary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.page-main {
+  flex: 1 0 auto;
+  width: 100%;
+  min-height: 100svh;
+  padding-top: var(--navbar-height);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

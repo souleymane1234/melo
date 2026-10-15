@@ -1,0 +1,233 @@
+.site-hero-video--scene {
+  background: #2a181c;
+}
+
+.site-hero-video--scene::after {
+  display: none;
+}
+
+.hero-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgb(156 74 86 / 0.28), transparent 62%),
+    radial-gradient(ellipse 90% 70% at 50% 110%, rgb(58 36 40 / 0.9), transparent 50%),
+    #2a181c;
+}
+
+.hero-scene__glow {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: min(70vw, 640px);
+  height: min(70vw, 640px);
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(196 137 146 / 0.35) 0%, transparent 68%);
+  filter: blur(8px);
+  animation: hero-scene-pulse 6s ease-in-out infinite;
+}
+
+.hero-scene__glow--soft {
+  width: min(92vw, 920px);
+  height: min(92vw, 920px);
+  background: radial-gradient(circle, rgb(156 74 86 / 0.16) 0%, transparent 70%);
+  animation-duration: 9s;
+  animation-direction: reverse;
+}
+
+.hero-scene__vinyl-wrap {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: min(58vw, 520px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+}
+
+.hero-scene__vinyl {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #c48992 0 11%, #9c4a56 12% 16%, #1a1012 17% 100%);
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 0.45),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  animation: hero-scene-spin 28s linear infinite;
+}
+
+.hero-scene__grooves {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgb(255 255 255 / 0.05) 0 1px,
+      transparent 1px 9px
+    );
+  mask-image: radial-gradient(circle, transparent 18%, #000 22%, #000 92%, transparent 96%);
+}
+
+.hero-scene__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d4a8ae, #9c4a56 55%, #7f3a45);
+  box-shadow: inset 0 0 0 6px rgb(58 36 40 / 0.35);
+}
+
+.hero-scene__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgb(232 207 201 / 0.28);
+  animation: hero-scene-ripple 5.5s ease-out infinite;
+}
+
+.hero-scene__ring--2 {
+  animation-delay: 1.8s;
+}
+
+.hero-scene__ring--3 {
+  animation-delay: 3.6s;
+}
+
+.hero-scene__notes {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.hero-scene__notes li {
+  position: absolute;
+  bottom: 12%;
+  color: rgb(232 207 201 / 0.72);
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+  animation: hero-scene-float 12s ease-in-out infinite;
+}
+
+.hero-scene__eq {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  width: min(88vw, 720px);
+  height: 56px;
+  translate: -50% 0;
+  opacity: 0.55;
+}
+
+.hero-scene__eq span {
+  flex: 1 1 auto;
+  max-width: 8px;
+  height: 100%;
+  border-radius: 99px;
+  background: #c48992;
+  transform-origin: bottom center;
+  animation: hero-scene-eq 1.2s ease-in-out infinite;
+}
+
+.site-hero-video--scene .site-hero-video__overlay--center {
+  background: linear-gradient(
+    180deg,
+    rgb(42 24 28 / 0.18) 0%,
+    rgb(42 24 28 / 0.42) 46%,
+    rgb(42 24 28 / 0.78) 100%
+  );
+}
+
+@keyframes hero-scene-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hero-scene-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes hero-scene-ripple {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+@keyframes hero-scene-float {
+  0% {
+    transform: translateY(20px) scale(0.85);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-72vh) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes hero-scene-eq {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-scene__vinyl-wrap {
+    width: min(78vw, 380px);
+    top: 42%;
+  }
+
+  .hero-scene__eq {
+    height: 40px;
+    bottom: 5%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-scene__vinyl,
+  .hero-scene__glow,
+  .hero-scene__ring,
+  .hero-scene__notes li,
+  .hero-scene__eq span {
+    animation: none;
+  }
+
+  .hero-scene__eq span {
+    transform: scaleY(0.45);
+  }
+
+  .hero-scene__notes {
+    display: none;
+  }
+}
