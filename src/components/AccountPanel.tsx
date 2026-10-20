@@ -1,98 +1,109 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { ApiHttpError } from '../lib/api'
-import type { StudentProfileResponseDto } from '../lib/api/modules/profile'
+import type { ProfileDto, ProfileGender } from '../lib/api/modules/profile'
 import {
-  clearAuthSession,
+  authUserFromDto,
   getAccessToken,
   getAuthEventName,
   getAuthUser,
   isApiLoggedIn,
   setAuthSession,
 } from '../lib/auth-session'
-import { isCandidateLoggedIn, logoutCandidate } from '../lib/candidate-auth'
 import { MUSIC_ROUTES } from '../lib/music-routes'
-import { profileApi } from '../services/api-client'
+import { logout, profileApi } from '../services/api-client'
 import { PageLoader } from './PageLoader'
 import './AccountPanel.css'
+
+const GENDERS: { id: ProfileGender; label: string }[] = [
+  { id: 'FEMALE', label: 'Femme' },
+  { id: 'MALE', label: 'Homme' },
+  { id: 'OTHER', label: 'Autre' },
+  { id: 'PREFER_NOT_TO_SAY', label: 'Je préfère ne pas le dire' },
+]
 
 type ProfileForm = {
   firstName: string
   lastName: string
   email: string
-  phoneNumber: string
+  phone: string
+  dateOfBirth: string
+  gender: ProfileGender | ''
+  nationality: string
+  residentialAddress: string
   city: string
   country: string
   bio: string
 }
 
-function emptyForm(email = ''): ProfileForm {
-  return {
-    firstName: '',
-    lastName: '',
-    email,
-    phoneNumber: '',
-    city: '',
-    country: '',
-    bio: '',
-  }
+function toDateInput(value: string | null | undefined): string {
+  return value ? value.slice(0, 10) : ''
+}
+
+function toGender(value: string | null | undefined): ProfileGender | '' {
+  return GENDERS.some((item) => item.id === value) ? (value as ProfileGender) : ''
 }
 
 function formFromAuthUser(): ProfileForm {
   const user = getAuthUser()
   return {
-    ...emptyForm(user?.email ?? ''),
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
-    phoneNumber: user?.phoneNumber ?? '',
+    email: user?.email ?? '',
+    phone: user?.phoneNumber ?? '',
+    dateOfBirth: toDateInput(user?.dateOfBirth),
+    gender: toGender(user?.gender),
+    nationality: user?.nationality ?? '',
+    residentialAddress: user?.address ?? '',
     city: user?.city ?? '',
     country: user?.country ?? '',
     bio: user?.bio ?? '',
   }
 }
 
-function formFromApiProfile(profile: StudentProfileResponseDto, emailFallback: string): ProfileForm {
+function formFromApiProfile(profile: ProfileDto): ProfileForm {
   return {
     firstName: profile.firstName ?? '',
     lastName: profile.lastName ?? '',
-    email: emailFallback,
-    phoneNumber: profile.phoneNumber ?? '',
+    email: profile.email ?? '',
+    phone: profile.phone ?? getAuthUser()?.phoneNumber ?? '',
+    dateOfBirth: toDateInput(profile.dateOfBirth),
+    gender: toGender(profile.gender),
+    nationality: profile.nationality ?? '',
+    residentialAddress: profile.residentialAddress ?? '',
     city: profile.city ?? '',
     country: profile.country ?? '',
     bio: profile.bio ?? '',
   }
 }
 
-function syncAuthUserFromProfile(profile: StudentProfileResponseDto): void {
+function syncAuthUserFromProfile(profile: ProfileDto): void {
   const token = getAccessToken()
-  const current = getAuthUser()
-  if (!token || !current) return
-  setAuthSession({
-    accessToken: token,
-    user: {
-      ...current,
-      firstName: profile.firstName ?? current.firstName,
-      lastName: profile.lastName ?? current.lastName,
-      phoneNumber: profile.phoneNumber ?? current.phoneNumber,
-      bio: profile.bio ?? current.bio,
-      city: profile.city ?? current.city,
-      country: profile.country ?? current.country,
-    },
-  })
+  if (!token) return
+  setAuthSession({ accessToken: token, user: authUserFromDto(profile, getAuthUser()?.phoneNumber) })
+}
+
+function safeNext(): string | null {
+  const next = new URLSearchParams(window.location.search).get('next')
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null
+}
+
+function isWelcome(): boolean {
+  return new URLSearchParams(window.location.search).get('bienvenue') === '1'
 }
 
 export function AccountPanel() {
-  const [loggedIn, setLoggedIn] = useState(() => isApiLoggedIn() || isCandidateLoggedIn())
-  const [loading, setLoading] = useState(() => isApiLoggedIn())
+  const [loggedIn, setLoggedIn] = useState(isApiLoggedIn)
+  const [loading, setLoading] = useState(isApiLoggedIn)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState<ProfileForm | null>(() =>
-    isApiLoggedIn() || isCandidateLoggedIn() ? formFromAuthUser() : null,
-  )
+  const [welcome, setWelcome] = useState(isWelcome)
+  const [nextPath] = useState(safeNext)
+  const [form, setForm] = useState<ProfileForm | null>(() => (isApiLoggedIn() ? formFromAuthUser() : null))
 
   useEffect(() => {
     const onChanged = () => {
-      const nextLogged = isApiLoggedIn() || isCandidateLoggedIn()
+      const nextLogged = isApiLoggedIn()
       setLoggedIn(nextLogged)
       if (!nextLogged) {
         setForm(null)
@@ -108,26 +119,17 @@ export function AccountPanel() {
   }, [])
 
   useEffect(() => {
-    if (!loggedIn || !isApiLoggedIn()) {
-      return
-    }
-
+    if (!loggedIn) return
     let cancelled = false
 
     void (async () => {
-      setError('')
       try {
         const profile = await profileApi.get()
         if (cancelled) return
-        const email = getAuthUser()?.email ?? ''
-        setForm(formFromApiProfile(profile, email))
+        setForm(formFromApiProfile(profile))
         syncAuthUserFromProfile(profile)
       } catch (err) {
         if (cancelled) return
-        if (ApiHttpError.isInstance(err) && err.status === 404) {
-          setForm((prev) => prev ?? formFromAuthUser())
-          return
-        }
         setError(ApiHttpError.isInstance(err) ? err.message : 'Impossible de charger le profil.')
         setForm((prev) => prev ?? formFromAuthUser())
       } finally {
@@ -150,136 +152,197 @@ export function AccountPanel() {
         </p>
         <div className="profil-page__actions">
           <a href={MUSIC_ROUTES.login} className="ui-btn ui-btn--primary">
-            Se connecter
-          </a>
-          <a href={MUSIC_ROUTES.register} className="ui-btn ui-btn--ghost">
-            Créer un compte
+            Se connecter avec mon numéro
           </a>
         </div>
+        <p>Un code vous est envoyé par SMS. Pas de mot de passe ; le compte est créé automatiquement.</p>
       </section>
     )
+  }
+
+  const update = <K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) =>
+    setForm({ ...form, [key]: value })
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!isApiLoggedIn()) {
+      setError('Session expirée. Reconnectez-vous pour enregistrer.')
+      return
+    }
+    setSaving(true)
+    setSaved(false)
+    setError('')
+    const firstName = form.firstName.trim()
+    const lastName = form.lastName.trim()
+    try {
+      const updated = await profileApi.update({
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        name: [firstName, lastName].filter(Boolean).join(' ') || undefined,
+        email: form.email.trim() || undefined,
+        dateOfBirth: form.dateOfBirth || undefined,
+        gender: form.gender || undefined,
+        nationality: form.nationality.trim() || undefined,
+        residentialAddress: form.residentialAddress.trim() || undefined,
+        city: form.city.trim() || undefined,
+        country: form.country.trim() || undefined,
+        bio: form.bio.trim() || undefined,
+      })
+      setForm(formFromApiProfile(updated))
+      syncAuthUserFromProfile(updated)
+      setSaved(true)
+      if (welcome) {
+        setWelcome(false)
+        window.history.replaceState(null, '', `${MUSIC_ROUTES.space}#compte`)
+      }
+    } catch (err) {
+      setError(ApiHttpError.isInstance(err) ? err.message : 'Impossible d’enregistrer le profil.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <section className="profil-page__inner">
       <header>
-        <h2>Mon compte</h2>
-        <p>Vos informations personnelles.</p>
+        <h2>{welcome ? 'Bienvenue ! Complétez votre profil' : 'Mon compte'}</h2>
+        <p>
+          {welcome
+            ? 'Votre compte est créé. Ajoutez quelques informations pour personnaliser votre espace.'
+            : 'Vos informations personnelles.'}
+        </p>
       </header>
 
-        {loading ? <PageLoader label="Chargement du profil…" /> : null}
-        {error ? (
-          <p className="profil-page__status profil-page__status--error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {saved ? (
-          <p className="profil-page__status profil-page__status--ok" role="status">
-            Profil enregistré.
-          </p>
-        ) : null}
+      {loading ? <PageLoader label="Chargement du profil…" /> : null}
+      {error ? (
+        <p className="profil-page__status profil-page__status--error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <div className="profil-page__saved" role="status">
+          <p className="profil-page__status profil-page__status--ok">Profil enregistré.</p>
+          <a className="ui-btn ui-btn--primary" href={nextPath ?? MUSIC_ROUTES.generate}>
+            {nextPath === MUSIC_ROUTES.generate ? 'Continuer ma chanson' : 'Créer une chanson'}
+          </a>
+        </div>
+      ) : null}
 
-        <form
-          className="profil-page__form ui-card"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            if (!isApiLoggedIn()) {
-              setError('Session expirée. Reconnectez-vous pour enregistrer.')
-              return
-            }
-            setSaving(true)
-            setSaved(false)
-            setError('')
-            try {
-              const updated = await profileApi.update({
-                firstName: form.firstName.trim() || undefined,
-                lastName: form.lastName.trim() || undefined,
-                phoneNumber: form.phoneNumber.trim() || undefined,
-                bio: form.bio.trim() || undefined,
-                city: form.city.trim() || undefined,
-                country: form.country.trim() || undefined,
-              })
-              setForm(formFromApiProfile(updated, form.email))
-              syncAuthUserFromProfile(updated)
-              setSaved(true)
-              window.setTimeout(() => setSaved(false), 2200)
-            } catch (err) {
-              setError(ApiHttpError.isInstance(err) ? err.message : 'Impossible d’enregistrer le profil.')
-            } finally {
-              setSaving(false)
-            }
-          }}
-        >
-          <label>
-            Prénom
-            <input
-              value={form.firstName}
-              onChange={(event) => setForm({ ...form, firstName: event.target.value })}
-              autoComplete="given-name"
-            />
-          </label>
-          <label>
-            Nom
-            <input
-              value={form.lastName}
-              onChange={(event) => setForm({ ...form, lastName: event.target.value })}
-              autoComplete="family-name"
-            />
-          </label>
-          <label>
-            Email
-            <input value={form.email} readOnly autoComplete="email" />
-          </label>
-          <label>
-            Téléphone
-            <input
-              value={form.phoneNumber}
-              onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })}
-              autoComplete="tel"
-            />
-          </label>
-          <label>
-            Ville
-            <input
-              value={form.city}
-              onChange={(event) => setForm({ ...form, city: event.target.value })}
-              autoComplete="address-level2"
-            />
-          </label>
-          <label>
-            Pays
-            <input
-              value={form.country}
-              onChange={(event) => setForm({ ...form, country: event.target.value })}
-              autoComplete="country-name"
-            />
-          </label>
-          <label className="profil-page__bio">
-            Bio
-            <textarea
-              rows={4}
-              value={form.bio}
-              onChange={(event) => setForm({ ...form, bio: event.target.value })}
-              placeholder="Quelques mots sur votre univers musical…"
-            />
-          </label>
-          <div className="profil-page__actions">
-            <button type="submit" className="ui-btn ui-btn--primary" disabled={saving}>
-              {saving ? 'Enregistrement…' : 'Enregistrer'}
-            </button>
-            <button
-              type="button"
-              className="ui-btn ui-btn--ghost"
-              onClick={() => {
-                logoutCandidate()
-                clearAuthSession()
+      <form className="profil-page__form ui-card" onSubmit={onSubmit}>
+        <label>
+          Prénom
+          <input
+            value={form.firstName}
+            onChange={(event) => update('firstName', event.target.value)}
+            autoComplete="given-name"
+          />
+        </label>
+        <label>
+          Nom
+          <input
+            value={form.lastName}
+            onChange={(event) => update('lastName', event.target.value)}
+            autoComplete="family-name"
+          />
+        </label>
+        <label>
+          Téléphone <span>(identifiant de connexion)</span>
+          <input value={form.phone} readOnly autoComplete="tel" />
+        </label>
+        <label>
+          Email <span>(optionnel)</span>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) => update('email', event.target.value)}
+            autoComplete="email"
+          />
+        </label>
+        <label>
+          Date de naissance
+          <input
+            type="date"
+            value={form.dateOfBirth}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(event) => update('dateOfBirth', event.target.value)}
+            autoComplete="bday"
+          />
+        </label>
+        <label>
+          Genre
+          <select
+            value={form.gender}
+            onChange={(event) => update('gender', event.target.value as ProfileGender | '')}
+          >
+            <option value="">—</option>
+            {GENDERS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Nationalité
+          <input
+            value={form.nationality}
+            onChange={(event) => update('nationality', event.target.value)}
+            placeholder="Ex. Ivoirienne"
+          />
+        </label>
+        <label>
+          Pays
+          <input
+            value={form.country}
+            onChange={(event) => update('country', event.target.value)}
+            autoComplete="country-name"
+            placeholder="Ex. Côte d’Ivoire"
+          />
+        </label>
+        <label>
+          Ville
+          <input
+            value={form.city}
+            onChange={(event) => update('city', event.target.value)}
+            autoComplete="address-level2"
+            placeholder="Ex. Abidjan"
+          />
+        </label>
+        <label>
+          Adresse
+          <input
+            value={form.residentialAddress}
+            onChange={(event) => update('residentialAddress', event.target.value)}
+            autoComplete="street-address"
+            placeholder="Ex. Cocody, Riviera 2"
+          />
+        </label>
+        <label className="profil-page__bio">
+          Bio
+          <textarea
+            rows={4}
+            value={form.bio}
+            onChange={(event) => update('bio', event.target.value)}
+            placeholder="Quelques mots sur vous…"
+          />
+        </label>
+        <div className="profil-page__actions">
+          <button type="submit" className="ui-btn ui-btn--primary" disabled={saving}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+          <button
+            type="button"
+            className="ui-btn ui-btn--ghost"
+            onClick={() => {
+              void logout().finally(() => {
                 window.location.href = '/'
-              }}
-            >
-              Déconnexion
-            </button>
-          </div>
-        </form>
+              })
+            }}
+          >
+            Déconnexion
+          </button>
+        </div>
+      </form>
     </section>
   )
 }

@@ -40,7 +40,7 @@ export function SongCard({ track, href, showPlayer = false }: SongCardProps) {
           {genreLabel(track.genre)} · {moodLabel(track.mood)}
         </p>
       </div>
-      {showPlayer ? <AudioPlayer track={track} compact /> : null}
+      {showPlayer && track.audioUrl ? <AudioPlayer track={track} compact /> : null}
     </article>
   )
 }

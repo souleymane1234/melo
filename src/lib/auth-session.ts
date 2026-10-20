@@ -1,3 +1,5 @@
+import type { AuthUserDto } from './api/modules/auth'
+
 const ACCESS_TOKEN_KEY = 'wsci-access-token'
 const REFRESH_TOKEN_KEY = 'wsci-refresh-token'
 const AUTH_USER_KEY = 'wsci-auth-user'
@@ -5,7 +7,7 @@ const AUTH_EVENT = 'wsci-auth-changed'
 
 export type AuthUser = {
   id?: string
-  email: string
+  email?: string
   firstName?: string
   lastName?: string
   phoneNumber?: string
@@ -19,6 +21,25 @@ export type AuthUser = {
   nationality?: string
   dateOfBirth?: string
   academicLevel?: string
+}
+
+export function authUserFromDto(dto: AuthUserDto | null | undefined, fallbackPhone?: string): AuthUser {
+  const value = (input: string | null | undefined) => input?.trim() || undefined
+  return {
+    id: value(dto?.id),
+    email: value(dto?.email),
+    firstName: value(dto?.firstName),
+    lastName: value(dto?.lastName),
+    phoneNumber: value(dto?.phone) ?? fallbackPhone,
+    profileImage: value(dto?.avatarUrl),
+    bio: value(dto?.bio),
+    city: value(dto?.city),
+    country: value(dto?.country),
+    address: value(dto?.residentialAddress),
+    gender: value(dto?.gender),
+    nationality: value(dto?.nationality),
+    dateOfBirth: value(dto?.dateOfBirth),
+  }
 }
 
 function notifyAuthChanged(): void {

@@ -1,68 +1,46 @@
-export interface ProfileSocialLinkDto {
-  platform: string
-  url: string
-  logoUrl?: string | null
-}
+export type ProfileGender = 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY'
 
-/** Corps PUT /api/v1/profile/user */
-export interface UpdateStudentProfileDto {
-  firstName?: string
-  lastName?: string
-  phoneNumber?: string
-  bio?: string
-  videoPresentationUrl?: string
-  dateOfBirth?: string
-  gender?: string
-  nationality?: string
-  address?: string
-  city?: string
-  country?: string
-  profileImage?: string
-  coverImage?: string
-  interests?: string[]
-  socialLinks?: ProfileSocialLinkDto[]
-  academicLevel?: string
-}
-
-/** Réponse GET/PUT /api/v1/profile/user */
-export interface StudentProfileResponseDto {
+/** Réponse GET/PATCH /api/v1/profile/me (champ `data`). */
+export interface ProfileDto {
   id: string
+  email?: string | null
+  phone?: string | null
+  avatarUrl?: string | null
   firstName?: string | null
   lastName?: string | null
-  phoneNumber?: string | null
-  bio?: string | null
-  videoPresentationUrl?: string | null
+  name?: string | null
+  role?: string | null
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string
   dateOfBirth?: string | null
-  gender?: string | null
-  nationality?: string | null
-  address?: string | null
+  gender?: ProfileGender | null
+  residentialAddress?: string | null
+  bio?: string | null
   city?: string | null
   country?: string | null
-  profileImage?: string | null
-  coverImage?: string | null
-  interests: string[]
-  socialLinks?: ProfileSocialLinkDto[] | null
-  academicLevel?: string | null
-  hasForeignFile: boolean
-  hasScholarshipFile: boolean
-  createdAt: string
-  updatedAt: string
+  nationality?: string | null
+  unreadNotificationsCount?: number
 }
 
-/** Certaines routes renvoient encore une enveloppe `{ success, data }`. */
-export type StudentProfileEnvelopeDto =
-  | StudentProfileResponseDto
-  | {
-      success: boolean
-      message?: string
-      data: StudentProfileResponseDto
-    }
+/** Corps PATCH /api/v1/profile/me */
+export interface UpdateProfileDto {
+  firstName?: string
+  lastName?: string
+  name?: string
+  email?: string
+  avatarUrl?: string
+  dateOfBirth?: string
+  gender?: ProfileGender
+  residentialAddress?: string
+  bio?: string
+  city?: string
+  country?: string
+  nationality?: string
+}
 
-export function unwrapStudentProfile(
-  response: StudentProfileEnvelopeDto,
-): StudentProfileResponseDto {
-  if (response && typeof response === 'object' && 'data' in response && response.data) {
-    return response.data
-  }
-  return response as StudentProfileResponseDto
+export interface ProfileEnvelopeDto {
+  success: boolean
+  message?: string
+  data: ProfileDto
 }

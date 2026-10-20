@@ -12,6 +12,7 @@ interface ImportMetaEnv {
   readonly VITE_MUSIC_TRACKS_PATH?: string
   readonly VITE_MUSIC_MY_TRACKS_PATH?: string
   readonly VITE_MUSIC_RECEIVED_PATH?: string
+  readonly VITE_MUSIC_GENERATION_LIVE?: string
 }
 
 interface ImportMeta {

@@ -1,0 +1,70 @@
+.track-status {
+  --status-color: var(--color-text-muted);
+
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 30%, var(--color-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--status-color) 7%, var(--color-white));
+}
+
+.track-status--processing {
+  --status-color: var(--color-primary);
+}
+
+.track-status--completed {
+  --status-color: var(--color-success);
+}
+
+.track-status--failed {
+  --status-color: var(--color-danger);
+}
+
+.track-status__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--status-color);
+}
+
+.track-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.track-status--pending .track-status__dot,
+.track-status--processing .track-status__dot {
+  animation: track-status-pulse 1.6s ease-in-out infinite;
+}
+
+.track-status__message {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.track-status__date {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+@keyframes track-status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-status__dot {
+    animation: none !important;
+  }
+}

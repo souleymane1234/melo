@@ -4,7 +4,6 @@ import type {
   MusicLyricsMode,
   MusicTrack,
   MusicTrackStatus,
-  MusicVoiceType,
   SongRecipient,
 } from '../../../music-types'
 
@@ -13,7 +12,10 @@ export type GenerateMusicBodyDto = GenerateMusicInput
 export interface MusicTrackDto {
   id?: string
   title?: string | null
+  jobId?: string | null
   prompt?: string | null
+  occasion?: string | null
+  error?: string | null
   description?: string | null
   genre?: string | null
   mood?: string | null
@@ -37,6 +39,7 @@ export interface MusicTrackDto {
   recipient?: Partial<SongRecipient> | null
   deliveryStatus?: string | null
   delivery_status?: string | null
+  deliveredAt?: string | null
 }
 
 export interface MusicJobDto {
@@ -49,12 +52,6 @@ export interface MusicJobDto {
   audio_url?: string | null
   error?: string | null
   message?: string | null
-}
-
-export interface MusicListDto {
-  items?: MusicTrackDto[]
-  data?: MusicTrackDto[] | { items?: MusicTrackDto[] }
-  tracks?: MusicTrackDto[]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -71,18 +68,11 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function normalizeVoice(value: string | undefined): MusicVoiceType {
-  if (value === 'male' || value === 'female' || value === 'duo' || value === 'instrumental') {
-    return value
-  }
-  return 'female'
-}
-
 function normalizeLyricsMode(value: string | undefined): MusicLyricsMode {
   return value === 'custom' ? 'custom' : 'ai'
 }
 
-function normalizeStatus(value: string | undefined): MusicTrackStatus {
+export function normalizeStatus(value: string | undefined): MusicTrackStatus {
   if (value === 'pending' || value === 'processing' || value === 'completed' || value === 'failed') {
     return value
   }
@@ -152,17 +142,18 @@ export function mapTrackDto(
   fallback?: Partial<MusicTrack>,
 ): MusicTrack | null {
   const audioUrl =
-    asString(dto.audioUrl) ?? asString(dto.audio_url) ?? asString(dto.url) ?? fallback?.audioUrl
+    asString(dto.audioUrl) ?? asString(dto.audio_url) ?? asString(dto.url) ?? fallback?.audioUrl ?? ''
   const id = asString(dto.id) ?? fallback?.id
-  if (!id || !audioUrl) return null
+  if (!id) return null
 
   return {
     id,
     title: asString(dto.title) ?? fallback?.title ?? 'Sans titre',
     prompt: asString(dto.prompt) ?? asString(dto.description) ?? fallback?.prompt ?? '',
+    occasion: asString(dto.occasion) ?? fallback?.occasion,
     genre: asString(dto.genre) ?? fallback?.genre ?? 'pop',
     mood: asString(dto.mood) ?? fallback?.mood ?? 'joyeuse',
-    voiceType: normalizeVoice(asString(dto.voiceType) ?? asString(dto.voice_type) ?? fallback?.voiceType),
+    voiceType: asString(dto.voiceType) ?? asString(dto.voice_type) ?? fallback?.voiceType ?? 'female',
     language: asString(dto.language) ?? fallback?.language ?? 'fr',
     lyricsMode: normalizeLyricsMode(
       asString(dto.lyricsMode) ?? asString(dto.lyrics_mode) ?? fallback?.lyricsMode,
@@ -172,11 +163,13 @@ export function mapTrackDto(
     coverUrl: asString(dto.coverUrl) ?? asString(dto.cover_url) ?? asString(dto.imageUrl),
     durationSeconds: asNumber(dto.durationSeconds) ?? asNumber(dto.duration) ?? fallback?.durationSeconds,
     createdAt: asString(dto.createdAt) ?? asString(dto.created_at) ?? fallback?.createdAt ?? new Date().toISOString(),
-    status: normalizeStatus(asString(dto.status) ?? fallback?.status ?? 'completed'),
+    status: normalizeStatus(asString(dto.status) ?? fallback?.status ?? (audioUrl ? 'completed' : 'pending')),
+    error: asString(dto.error),
     source: 'api',
     recipient: normalizeRecipient(dto.recipient) ?? fallback?.recipient,
     deliveryStatus:
       normalizeDelivery(asString(dto.deliveryStatus) ?? asString(dto.delivery_status)) ??
       fallback?.deliveryStatus,
+    deliveredAt: asString(dto.deliveredAt) ?? fallback?.deliveredAt,
   }
 }

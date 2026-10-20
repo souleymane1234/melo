@@ -1,5 +1,5 @@
 export const PROFILE_API_PATHS = {
-  user: '/api/v1/profile/user',
+  me: '/api/v1/profile/me',
 } as const
 
 export type ProfileApiPaths = typeof PROFILE_API_PATHS

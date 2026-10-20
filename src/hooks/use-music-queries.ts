@@ -1,8 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { isMusicEngineConfigured } from '../config/app-config'
+import { useEffect } from 'react'
+import { isMusicEngineConfigured, MUSIC_GENERATION_LIVE } from '../config/app-config'
 import { ApiHttpError } from '../lib/api'
+import { isApiLoggedIn } from '../lib/auth-session'
 import { saveLocalTrack } from '../lib/music-library'
-import { MusicEngineUnavailableError, type GenerateMusicInput } from '../lib/music-types'
+import { displayedStatus } from '../lib/song-delivery'
+import {
+  MusicEngineUnavailableError,
+  type GenerateMusicInput,
+  type MusicTrack,
+  type MusicTrackStatus,
+} from '../lib/music-types'
 import { musicApi } from '../services/api-client'
 
 const musicQueryKeys = {
@@ -10,6 +18,13 @@ const musicQueryKeys = {
   mine: ['music', 'mine'] as const,
   received: ['music', 'received'] as const,
   detail: (id: string) => ['music', 'detail', id] as const,
+  job: (id: string) => ['music', 'job', id] as const,
+}
+
+const JOB_REFRESH_MS = MUSIC_GENERATION_LIVE ? 60_000 : 5 * 60_000
+
+function isInProgress(status: MusicTrackStatus | undefined): boolean {
+  return status === 'pending' || status === 'processing'
 }
 
 export function usePublicTracksQuery() {
@@ -27,6 +42,11 @@ export function useMyTracksQuery(enabled: boolean) {
     queryFn: ({ signal }) => musicApi.listMine(signal),
     enabled: enabled && isMusicEngineConfigured(),
     staleTime: 30_000,
+    refetchInterval: (query) =>
+      MUSIC_GENERATION_LIVE &&
+      query.state.data?.some((track) => track.status === 'pending' || track.status === 'processing')
+        ? 10_000
+        : false,
   })
 }
 
@@ -47,6 +67,37 @@ export function useTrackQuery(id: string | undefined) {
   })
 }
 
+/** Suit l’état de génération d’une chanson pas encore terminée et rafraîchit la liste quand il change. */
+export function useTrackJobQuery(track: MusicTrack) {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: musicQueryKeys.job(track.id),
+    queryFn: ({ signal }) => musicApi.getJob(track.id, signal),
+    enabled:
+      track.source === 'api' &&
+      isInProgress(displayedStatus(track.status, track.deliveryStatus, track.audioUrl)) &&
+      isApiLoggedIn() &&
+      isMusicEngineConfigured(),
+    staleTime: 30_000,
+    refetchInterval: (q) => {
+      const job = q.state.data
+      if (!job) return false
+      const delivery = job.track?.deliveryStatus ?? track.deliveryStatus
+      const audioUrl = job.track?.audioUrl ?? track.audioUrl
+      return isInProgress(displayedStatus(job.status, delivery, audioUrl)) ? JOB_REFRESH_MS : false
+    },
+  })
+
+  const jobStatus = query.data?.status
+  useEffect(() => {
+    if (jobStatus && jobStatus !== track.status) {
+      void queryClient.invalidateQueries({ queryKey: musicQueryKeys.mine })
+    }
+  }, [jobStatus, track.status, queryClient])
+
+  return query
+}
+
 export function useGenerateMusicMutation() {
   const queryClient = useQueryClient()
 
@@ -55,7 +106,7 @@ export function useGenerateMusicMutation() {
       if (!isMusicEngineConfigured()) {
         throw new MusicEngineUnavailableError()
       }
-      return musicApi.generate(input)
+      return musicApi.generate(input, { follow: MUSIC_GENERATION_LIVE })
     },
     onSuccess: (track) => {
       if (track.audioUrl && track.status === 'completed') {
@@ -72,6 +123,12 @@ export function musicErrorMessage(error: unknown): string {
   if (ApiHttpError.isInstance(error)) {
     if (error.status === 0) {
       return 'Impossible de joindre le moteur de génération. Vérifiez la connexion, puis réessayez.'
+    }
+    if (error.status === 401) {
+      return 'Votre session a expiré. Reconnectez-vous pour envoyer la chanson.'
+    }
+    if (error.status === 403) {
+      return error.message || 'Un abonnement actif est nécessaire, ou votre quota de chansons est atteint.'
     }
     if (error.status === 404) {
       return 'Le service de génération n’est pas disponible sur l’API configurée.'

@@ -75,6 +75,11 @@
   color: var(--color-text-muted);
 }
 
+.song-detail__status {
+  margin: 0;
+  color: var(--color-text);
+}
+
 .song-detail__actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,24 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { FaArrowLeft, FaArrowRight, FaArrowRotateRight, FaCheck, FaDownload } from 'react-icons/fa6'
+import { MUSIC_DELIVERY_DELAY_HOURS, MUSIC_GENERATION_LIVE } from '../config/app-config'
+import { useCatalog, type ChoiceOption } from '../hooks/use-catalog'
 import { musicErrorMessage, useGenerateMusicMutation } from '../hooks/use-music-queries'
-import {
-  MUSIC_DURATIONS,
-  MUSIC_GENRES,
-  MUSIC_LANGUAGES,
-  MUSIC_LYRICS_MODES,
-  MUSIC_MOODS,
-  MUSIC_VOICES,
-  PROMPT_EXAMPLES,
-  genreLabel,
-  languageLabel,
-  moodLabel,
-  voiceLabel,
-} from '../lib/music-options'
+import { ApiHttpError } from '../lib/api'
+import { isApiLoggedIn } from '../lib/auth-session'
+import { MUSIC_LYRICS_MODES } from '../lib/music-options'
 import { MUSIC_ROUTES, songPath } from '../lib/music-routes'
+import type { DeliveryChannel, MusicLyricsMode } from '../lib/music-types'
+import { toE164 } from '../lib/phone'
 import { SONG_OCCASIONS } from '../lib/platform-content'
-import type { DeliveryChannel, MusicLyricsMode, MusicVoiceType } from '../lib/music-types'
 import { channelLabel, isValidEmail, isValidPhone } from '../lib/song-delivery'
 import { AudioPlayer } from './AudioPlayer'
+import { RequestSentModal } from './RequestSentModal'
 import { SongDelivery } from './SongDelivery'
 import './GeneratePage.css'
 
@@ -37,6 +31,42 @@ const CHANNELS: { id: DeliveryChannel; label: string; hint: string }[] = [
   { id: 'sms', label: 'SMS', hint: 'Le lien arrive sur son téléphone' },
   { id: 'email', label: 'E-mail', hint: 'Le lien arrive dans sa boîte mail' },
 ]
+
+const DRAFT_KEY = 'melo-create-draft'
+
+type Draft = {
+  occasion: string
+  prompt: string
+  title: string
+  genre: string
+  mood: string
+  voiceType: string
+  language: string
+  lyricsMode: MusicLyricsMode
+  lyrics: string
+  durationSeconds: number
+  recipientName: string
+  senderName: string
+  channel: DeliveryChannel
+  recipientEmail: string
+  recipientPhone: string
+  recipientMessage: string
+  step: number
+  furthest: number
+}
+
+function readDraft(): Partial<Draft> {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY)
+    return raw ? (JSON.parse(raw) as Partial<Draft>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function labelOf<T extends string | number>(options: ChoiceOption<T>[], id: T): string {
+  return options.find((item) => item.id === id)?.label ?? String(id)
+}
 
 type ChoiceGroupProps<T extends string | number> = {
   legend: string
@@ -79,29 +109,83 @@ function ChoiceGroup<T extends string | number>({
 
 export function GeneratePage() {
   const params = useMemo(() => new URLSearchParams(window.location.search), [])
-  const [prompt, setPrompt] = useState(params.get('prompt') ?? '')
-  const [title, setTitle] = useState('')
-  const [genre, setGenre] = useState(params.get('genre') ?? 'afrobeat')
-  const [mood, setMood] = useState(params.get('mood') ?? 'joyeuse')
-  const [voiceType, setVoiceType] = useState<MusicVoiceType>('female')
-  const [language, setLanguage] = useState('fr')
-  const [lyricsMode, setLyricsMode] = useState<MusicLyricsMode>('ai')
-  const [lyrics, setLyrics] = useState('')
-  const [durationSeconds, setDurationSeconds] = useState(60)
-  const [recipientName, setRecipientName] = useState('')
-  const [senderName, setSenderName] = useState('')
-  const [channel, setChannel] = useState<DeliveryChannel>('sms')
-  const [recipientEmail, setRecipientEmail] = useState('')
-  const [recipientPhone, setRecipientPhone] = useState('')
-  const [recipientMessage, setRecipientMessage] = useState('')
-  const [step, setStep] = useState(0)
-  const [furthest, setFurthest] = useState(0)
+  const [draft] = useState(readDraft)
+  const catalog = useCatalog()
+  const urlOccasion = params.get('occasion')
+  const [occasion, setOccasion] = useState(urlOccasion ?? draft.occasion ?? '')
+  const [prompt, setPrompt] = useState(
+    params.get('prompt') ??
+      (urlOccasion ? SONG_OCCASIONS.find((item) => item.code === urlOccasion)?.prompt : undefined) ??
+      draft.prompt ??
+      '',
+  )
+  const [title, setTitle] = useState(draft.title ?? '')
+  const [genre, setGenre] = useState(params.get('genre') ?? draft.genre ?? 'afrobeat')
+  const [mood, setMood] = useState(params.get('mood') ?? draft.mood ?? 'joyeuse')
+  const [voiceType, setVoiceType] = useState(draft.voiceType ?? 'female')
+  const [language, setLanguage] = useState(draft.language ?? 'fr')
+  const [lyricsMode, setLyricsMode] = useState<MusicLyricsMode>(draft.lyricsMode ?? 'ai')
+  const [lyrics, setLyrics] = useState(draft.lyrics ?? '')
+  const [durationSeconds, setDurationSeconds] = useState(draft.durationSeconds ?? 60)
+  const [recipientName, setRecipientName] = useState(draft.recipientName ?? '')
+  const [senderName, setSenderName] = useState(draft.senderName ?? '')
+  const [channel, setChannel] = useState<DeliveryChannel>(draft.channel ?? 'sms')
+  const [recipientEmail, setRecipientEmail] = useState(draft.recipientEmail ?? '')
+  const [recipientPhone, setRecipientPhone] = useState(draft.recipientPhone ?? '')
+  const [recipientMessage, setRecipientMessage] = useState(draft.recipientMessage ?? '')
+  const [step, setStep] = useState(draft.step ?? 0)
+  const [furthest, setFurthest] = useState(draft.furthest ?? 0)
   const [showErrors, setShowErrors] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const firstRender = useRef(true)
+  const loggedIn = isApiLoggedIn()
 
   const generation = useGenerateMusicMutation()
-  const track = generation.data && generation.data.audioUrl ? generation.data : null
+  const result = generation.data ?? null
+  const track = result?.status === 'completed' && result.audioUrl ? result : null
+
+  useEffect(() => {
+    const value: Draft = {
+      occasion,
+      prompt,
+      title,
+      genre,
+      mood,
+      voiceType,
+      language,
+      lyricsMode,
+      lyrics,
+      durationSeconds,
+      recipientName,
+      senderName,
+      channel,
+      recipientEmail,
+      recipientPhone,
+      recipientMessage,
+      step,
+      furthest,
+    }
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(value))
+  }, [
+    occasion,
+    prompt,
+    title,
+    genre,
+    mood,
+    voiceType,
+    language,
+    lyricsMode,
+    lyrics,
+    durationSeconds,
+    recipientName,
+    senderName,
+    channel,
+    recipientEmail,
+    recipientPhone,
+    recipientMessage,
+    step,
+    furthest,
+  ])
 
   const contact = channel === 'email' ? recipientEmail.trim() : recipientPhone.trim()
   const stepValid = [
@@ -140,19 +224,21 @@ export function GeneratePage() {
   }
 
   const generate = () => {
-    if (!allValid || generation.isPending) return
+    if (!allValid || !loggedIn || generation.isPending) return
     generation.reset()
-    generation.mutate({
+    generation.mutate(
+      {
       recipient: {
         name: recipientName.trim(),
         channel,
         email: channel === 'email' ? recipientEmail.trim() : undefined,
-        phone: channel === 'sms' ? recipientPhone.trim() : undefined,
+        phone: channel === 'sms' ? (toE164(recipientPhone) ?? recipientPhone.trim()) : undefined,
         message: recipientMessage.trim() || undefined,
         senderName: senderName.trim() || undefined,
       },
       prompt: prompt.trim(),
       title: title.trim() || undefined,
+      occasion: occasion || undefined,
       genre,
       mood,
       voiceType,
@@ -160,7 +246,17 @@ export function GeneratePage() {
       lyricsMode,
       lyrics: lyricsMode === 'custom' ? lyrics.trim() : undefined,
       durationSeconds,
-    })
+      },
+      { onSuccess: () => window.sessionStorage.removeItem(DRAFT_KEY) },
+    )
+  }
+
+  const pickOccasion = (code: string, defaultPrompt: string) => {
+    const next = occasion === code ? '' : code
+    setOccasion(next)
+    const isDefaultPrompt =
+      !prompt.trim() || catalog.occasions.some((item) => item.prompt && item.prompt === prompt)
+    if (next && defaultPrompt && isDefaultPrompt) setPrompt(defaultPrompt)
   }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -175,8 +271,57 @@ export function GeneratePage() {
     setFurthest(0)
   }
 
+  const resetGeneration = generation.reset
+  const startNewSong = useCallback(() => {
+    resetGeneration()
+    setOccasion('')
+    setPrompt('')
+    setTitle('')
+    setLyrics('')
+    setLyricsMode('ai')
+    setRecipientName('')
+    setRecipientEmail('')
+    setRecipientPhone('')
+    setRecipientMessage('')
+    setShowErrors(false)
+    setStep(0)
+    setFurthest(0)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [resetGeneration])
+
+  const requestSent = !MUSIC_GENERATION_LIVE && result && !track ? result : null
+
   const who = recipientName.trim() || 'cette personne'
+  const loginHref = `${MUSIC_ROUTES.login}?next=${encodeURIComponent(MUSIC_ROUTES.generate)}`
   const progress = Math.round((STEPS.filter((_, index) => isDone(index)).length / LAST_STEP) * 100)
+
+  if (MUSIC_GENERATION_LIVE && result && !track) {
+    return (
+      <main id="creer" className="page-main generate-page">
+        <div className="ui-container generate-page__layout">
+          <section className="generate-page__result ui-card">
+            <p className="ui-eyebrow">Création en cours</p>
+            <h1>Votre chanson pour {result.recipient?.name ?? who} se prépare</h1>
+            <p className="generate-page__note">
+              La composition prend un peu plus de temps que prévu. Elle continue sur nos serveurs : dès
+              qu’elle sera prête, le lien sera envoyé automatiquement à {result.recipient?.name ?? who}{' '}
+              par {channelLabel(result.recipient?.channel ?? channel)}. Vous pouvez suivre son avancement
+              dans Mon espace.
+            </p>
+            <div className="generate-page__result-actions">
+              <a className="ui-btn ui-btn--primary" href={`${MUSIC_ROUTES.space}#chansons`}>
+                Suivre dans Mon espace
+              </a>
+              <button type="button" className="ui-btn ui-btn--ghost" onClick={restart}>
+                <FaArrowRotateRight aria-hidden="true" />
+                Nouvelle chanson
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
+    )
+  }
 
   if (track) {
     return (
@@ -299,12 +444,13 @@ export function GeneratePage() {
               </label>
               <p className="wizard__sublabel">C’est pour quelle occasion ?</p>
               <div className="generate-page__examples">
-                {SONG_OCCASIONS.map((item) => (
+                {catalog.occasions.map((item) => (
                   <button
-                    key={item.label}
+                    key={item.code}
                     type="button"
-                    className={`generate-page__chip${prompt === item.prompt ? ' is-active' : ''}`}
-                    onClick={() => setPrompt(item.prompt)}
+                    className={`generate-page__chip${occasion === item.code ? ' is-active' : ''}`}
+                    aria-pressed={occasion === item.code}
+                    onClick={() => pickOccasion(item.code, item.prompt)}
                   >
                     <span aria-hidden="true">{item.emoji}</span> {item.label}
                   </button>
@@ -334,7 +480,7 @@ export function GeneratePage() {
               ) : null}
               <p className="generate-page__hint">Besoin d’inspiration ?</p>
               <div className="generate-page__examples">
-                {PROMPT_EXAMPLES.map((example) => (
+                {catalog.inspirations.map((example) => (
                   <button
                     key={example}
                     type="button"
@@ -361,10 +507,10 @@ export function GeneratePage() {
               <h2 ref={headingRef} tabIndex={-1}>
                 Quel style lui ressemble ?
               </h2>
-              <ChoiceGroup legend="Genre musical" name="genre" options={MUSIC_GENRES} value={genre} onChange={setGenre} />
-              <ChoiceGroup legend="Ambiance" name="mood" options={MUSIC_MOODS} value={mood} onChange={setMood} />
-              <ChoiceGroup legend="Voix" name="voiceType" options={MUSIC_VOICES} value={voiceType} onChange={setVoiceType} />
-              <ChoiceGroup legend="Langue" name="language" options={MUSIC_LANGUAGES} value={language} onChange={setLanguage} />
+              <ChoiceGroup legend="Genre musical" name="genre" options={catalog.genres} value={genre} onChange={setGenre} />
+              <ChoiceGroup legend="Ambiance" name="mood" options={catalog.moods} value={mood} onChange={setMood} />
+              <ChoiceGroup legend="Voix" name="voiceType" options={catalog.voices} value={voiceType} onChange={setVoiceType} />
+              <ChoiceGroup legend="Langue" name="language" options={catalog.languages} value={language} onChange={setLanguage} />
             </div>
           ) : null}
 
@@ -398,7 +544,7 @@ export function GeneratePage() {
               <ChoiceGroup
                 legend="Durée souhaitée"
                 name="duration"
-                options={MUSIC_DURATIONS}
+                options={catalog.durations}
                 value={durationSeconds}
                 onChange={setDurationSeconds}
                 hint="Prise en compte uniquement si le moteur le permet."
@@ -471,12 +617,20 @@ export function GeneratePage() {
               <h2 ref={headingRef} tabIndex={-1}>
                 Tout est prêt ?
               </h2>
+              {!MUSIC_GENERATION_LIVE ? (
+                <p className="wizard__lead">
+                  Votre chanson sera composée puis envoyée à {who} sous {MUSIC_DELIVERY_DELAY_HOURS} h.
+                </p>
+              ) : null}
               <dl className="wizard__recap">
                 <div>
                   <dt>Destinataire</dt>
                   <dd>
                     {recipientName.trim()}
                     {senderName.trim() ? ` · de la part de ${senderName.trim()}` : ''}
+                    {occasion
+                      ? ` · ${catalog.occasions.find((item) => item.code === occasion)?.label ?? occasion}`
+                      : ''}
                   </dd>
                   <button type="button" onClick={() => goTo(0)}>Modifier</button>
                 </div>
@@ -488,7 +642,8 @@ export function GeneratePage() {
                 <div>
                   <dt>Style</dt>
                   <dd>
-                    {genreLabel(genre)} · {moodLabel(mood)} · {voiceLabel(voiceType)} · {languageLabel(language)}
+                    {labelOf(catalog.genres, genre)} · {labelOf(catalog.moods, mood)} ·{' '}
+                    {labelOf(catalog.voices, voiceType)} · {labelOf(catalog.languages, language)}
                   </dd>
                   <button type="button" onClick={() => goTo(2)}>Modifier</button>
                 </div>
@@ -496,7 +651,7 @@ export function GeneratePage() {
                   <dt>Paroles</dt>
                   <dd>
                     {MUSIC_LYRICS_MODES.find((item) => item.id === lyricsMode)?.label} ·{' '}
-                    {MUSIC_DURATIONS.find((item) => item.id === durationSeconds)?.label}
+                    {labelOf(catalog.durations, durationSeconds)}
                   </dd>
                   <button type="button" onClick={() => goTo(3)}>Modifier</button>
                 </div>
@@ -512,6 +667,13 @@ export function GeneratePage() {
             </div>
           ) : null}
 
+          {step === LAST_STEP && !loggedIn ? (
+            <p className="generate-page__note">
+              Connectez-vous avec votre numéro de téléphone pour envoyer la chanson. Vos réponses sont
+              conservées : vous reviendrez directement à ce récapitulatif.
+            </p>
+          ) : null}
+
           {generation.isPending ? (
             <div className="generate-page__status" aria-live="polite">
               <div className="generate-page__loader" aria-hidden="true">
@@ -521,13 +683,23 @@ export function GeneratePage() {
                 <span />
                 <span />
               </div>
-              <p>Composition de la chanson pour {who}… Cette étape peut prendre un moment.</p>
+              <p>
+                {MUSIC_GENERATION_LIVE
+                  ? `Composition de la chanson pour ${who}… Cela peut prendre quelques minutes. Dès qu’elle sera prête, le lien partira automatiquement par ${channelLabel(channel)}.`
+                  : 'Enregistrement de votre demande…'}
+              </p>
             </div>
           ) : null}
 
           {generation.isError ? (
             <p className="wizard__error" role="alert">
               {musicErrorMessage(generation.error)}
+              {ApiHttpError.isInstance(generation.error) && generation.error.status === 401 ? (
+                <>
+                  {' '}
+                  <a href={loginHref}>Se reconnecter</a>
+                </>
+              ) : null}
             </p>
           ) : null}
 
@@ -550,18 +722,27 @@ export function GeneratePage() {
                 Continuer
                 <FaArrowRight aria-hidden="true" />
               </button>
-            ) : (
+            ) : loggedIn ? (
               <button
                 type="submit"
                 className="ui-btn ui-btn--primary"
                 disabled={!allValid || generation.isPending}
               >
-                {generation.isPending ? 'Génération en cours…' : 'Créer et envoyer la chanson'}
+                {generation.isPending
+                  ? 'Envoi…'
+                  : MUSIC_GENERATION_LIVE
+                    ? 'Créer et envoyer la chanson'
+                    : 'Valider ma demande'}
               </button>
+            ) : (
+              <a className="ui-btn ui-btn--primary" href={loginHref}>
+                Se connecter pour envoyer
+              </a>
             )}
           </div>
         </form>
       </div>
+      {requestSent ? <RequestSentModal track={requestSent} onNewSong={startNewSong} /> : null}
     </main>
   )
 }

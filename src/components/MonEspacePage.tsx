@@ -9,8 +9,10 @@ import type { MusicTrack } from '../lib/music-types'
 import { channelLabel } from '../lib/song-delivery'
 import { AccountPanel } from './AccountPanel'
 import { EmptyState } from './EmptyState'
+import { PageLoader } from './PageLoader'
 import { SongCard } from './SongCard'
 import { SongDelivery } from './SongDelivery'
+import { TrackStatus } from './TrackStatus'
 import './MonEspacePage.css'
 
 type SpaceTab = 'chansons' | 'recues' | 'compte'
@@ -104,8 +106,8 @@ export function MonEspacePage() {
           <p className="ui-eyebrow">Mon espace</p>
           <h1>{greeting}</h1>
           <p>
-            Retrouvez les chansons que vous avez créées et envoyées, celles qu’on vous a offertes, et
-            votre compte.
+            Retrouvez les chansons que vous avez créées et envoyées, celles qu’on vous a offertes,
+            et votre compte.
           </p>
         </header>
 
@@ -127,8 +129,16 @@ export function MonEspacePage() {
           ))}
         </div>
 
+        {tab === 'chansons' && mine.isError ? (
+          <p className="mon-espace__error" role="alert">
+            Impossible de récupérer vos chansons pour le moment. Réessayez dans un instant.
+          </p>
+        ) : null}
+
         {tab === 'chansons' ? (
-          created.length === 0 ? (
+          mine.isLoading && created.length === 0 ? (
+            <PageLoader label="Chargement de vos chansons…" />
+          ) : created.length === 0 ? (
             <EmptyState
               title="Vous n’avez pas encore créé de chanson"
               description="Racontez votre histoire, choisissez à qui l’offrir : la personne reçoit le lien par SMS ou e-mail."
@@ -140,29 +150,43 @@ export function MonEspacePage() {
             />
           ) : (
             <ul className="mon-espace__list">
-              {created.map((track) => (
-                <li key={track.id} className="mon-espace__item ui-card">
-                  <SongCard track={track} href={songPath(track.id)} showPlayer />
-                  <div className="mon-espace__details">
-                    {track.recipient ? (
-                      <p className="mon-espace__meta">
-                        Pour <strong>{track.recipient.name}</strong> · par{' '}
-                        {channelLabel(track.recipient.channel)}
-                        {track.recipient.channel === 'sms' && track.recipient.phone
-                          ? ` (${track.recipient.phone})`
-                          : ''}
-                        {track.recipient.channel === 'email' && track.recipient.email
-                          ? ` (${track.recipient.email})`
-                          : ''}
-                      </p>
+              {created.map((track) => {
+                const available = track.status === 'completed' && Boolean(track.audioUrl)
+                return (
+                  <li
+                    key={track.id}
+                    className={`mon-espace__item ui-card${available ? '' : ' mon-espace__item--waiting'}`}
+                  >
+                    {available ? (
+                      <SongCard track={track} href={songPath(track.id)} showPlayer />
                     ) : null}
-                    <SongDelivery track={track} compact />
-                    <a className="mon-espace__download" href={track.audioUrl} download>
-                      <FaDownload aria-hidden="true" /> Télécharger
-                    </a>
-                  </div>
-                </li>
-              ))}
+                    <div className="mon-espace__details">
+                      {!available ? <h3 className="mon-espace__title">{track.title}</h3> : null}
+                      {track.recipient ? (
+                        <p className="mon-espace__meta">
+                          Pour <strong>{track.recipient.name}</strong> · par{' '}
+                          {channelLabel(track.recipient.channel)}
+                          {track.recipient.channel === 'sms' && track.recipient.phone
+                            ? ` (${track.recipient.phone})`
+                            : ''}
+                          {track.recipient.channel === 'email' && track.recipient.email
+                            ? ` (${track.recipient.email})`
+                            : ''}
+                        </p>
+                      ) : null}
+                      <TrackStatus track={track} />
+                      {available ? (
+                        <>
+                          <SongDelivery track={track} compact showStatus={false} />
+                          <a className="mon-espace__download" href={track.audioUrl} download>
+                            <FaDownload aria-hidden="true" /> Télécharger
+                          </a>
+                        </>
+                      ) : null}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )
         ) : null}

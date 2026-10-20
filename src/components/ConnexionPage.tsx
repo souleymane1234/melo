@@ -1,46 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiHttpError } from '../lib/api'
-import {
-  getAuthEventName,
-  isCandidateLoggedIn,
-} from '../lib/candidate-auth'
-import { setAuthSession } from '../lib/auth-session'
+import { authUserFromDto, getAuthEventName, isApiLoggedIn, setAuthSession } from '../lib/auth-session'
+import { MUSIC_ROUTES } from '../lib/music-routes'
+import { toE164 } from '../lib/phone'
 import { authApi } from '../services/api-client'
-import { CaptchaField } from './CaptchaField'
-import { PasswordInput } from './PasswordInput'
 import './AuthPages.css'
 
-function splitFullName(fullName: string): { firstName: string; lastName: string } {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return { firstName: '', lastName: '' }
-  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] }
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+type Step = 'phone' | 'code'
+
+function safeNext(): string | null {
+  const next = new URLSearchParams(window.location.search).get('next')
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null
 }
 
-function getInitialAuthMode(): 'login' | 'register' {
-  const pathname = window.location.pathname
-  const mode = new URLSearchParams(window.location.search).get('mode')
-  if (pathname.startsWith('/inscription') || mode === 'register') return 'register'
-  return 'login'
-}
-
-function syncAuthUrl(mode: 'login' | 'register') {
-  const nextPath = mode === 'register' ? '/inscription' : '/connexion'
-  if (window.location.pathname !== nextPath) {
-    window.history.replaceState(null, '', nextPath)
+function errorMessage(error: unknown, fallback: string): string {
+  if (ApiHttpError.isInstance(error)) {
+    if (error.status === 0) return 'Impossible de joindre le serveur. Vérifiez votre connexion.'
+    if (error.status === 404) {
+      return 'Service de connexion introuvable : l’adresse de l’API n’est pas configurée ou est incorrecte.'
+    }
+    if (error.status === 503) return 'Service momentanément indisponible. Réessayez dans un instant.'
+    return error.message || fallback
   }
+  return fallback
 }
 
 export function ConnexionPage() {
-  const [mode, setMode] = useState<'login' | 'register'>(getInitialAuthMode)
-  const [loggedIn, setLoggedIn] = useState(() => isCandidateLoggedIn())
+  const [loggedIn, setLoggedIn] = useState(isApiLoggedIn)
+  const [step, setStep] = useState<Step>('phone')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phone, setPhone] = useState('')
+  const [security, setSecurity] = useState('')
+  const [code, setCode] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loginCaptchaChecked, setLoginCaptchaChecked] = useState(false)
-  const [registerCaptchaChecked, setRegisterCaptchaChecked] = useState(false)
+  const codeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const onChanged = () => setLoggedIn(isCandidateLoggedIn())
+    const onChanged = () => setLoggedIn(isApiLoggedIn())
     window.addEventListener(getAuthEventName(), onChanged)
     window.addEventListener('storage', onChanged)
     return () => {
@@ -56,336 +53,158 @@ export function ConnexionPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (step === 'code') codeRef.current?.focus()
+  }, [step])
+
   const closeModal = () => {
-    window.location.href = '/#accueil'
+    window.location.href = MUSIC_ROUTES.home
   }
 
+  const onSubmitPhone = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const target = toE164(phoneInput)
+    if (!target) {
+      setMessage('Numéro invalide. Exemple : +225 07 07 07 07 07')
+      return
+    }
+    setLoading(true)
+    setMessage('')
+    try {
+      const res = await authApi.sendPhoneCode({ phone_number: target })
+      setPhone(target)
+      setSecurity(res.data.security)
+      setCode(import.meta.env.DEV ? (res.data.otp_code ?? '') : '')
+      setStep('code')
+    } catch (error) {
+      setMessage(errorMessage(error, 'Impossible d’envoyer le code.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onSubmitCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (code.length < 4) {
+      setMessage('Saisissez le code reçu par SMS.')
+      return
+    }
+    setLoading(true)
+    setMessage('')
+    try {
+      const res = await authApi.verifyPhoneCode({ security, code })
+      if (!res.data?.access_token) {
+        setMessage(res.message || 'Connexion impossible.')
+        return
+      }
+      setAuthSession({
+        accessToken: res.data.access_token,
+        refreshToken: res.data.refresh_token,
+        user: authUserFromDto(res.data.user, phone),
+      })
+      const next = safeNext()
+      window.location.href = res.data.is_new_account
+        ? `${MUSIC_ROUTES.space}?bienvenue=1${next ? `&next=${encodeURIComponent(next)}` : ''}#compte`
+        : (next ?? `${MUSIC_ROUTES.space}#chansons`)
+    } catch (error) {
+      setMessage(errorMessage(error, 'Code invalide ou expiré.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const title = loggedIn ? 'Bienvenue' : step === 'phone' ? 'Connexion' : 'Code de vérification'
+  const subtitle = loggedIn
+    ? 'Vous êtes déjà connecté.'
+    : step === 'phone'
+      ? 'Entrez votre numéro de téléphone : nous vous envoyons un code par SMS. Pas de mot de passe.'
+      : `Saisissez le code envoyé au ${phone}.`
+
   return (
-    <div
-      className="auth-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="auth-modal-title"
-      onClick={closeModal}
-    >
-      <div
-        className="auth-modal__card"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="auth-modal__close"
-          onClick={closeModal}
-          aria-label="Fermer"
-        >
+    <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <div className="auth-modal__card">
+        <button type="button" className="auth-modal__close" onClick={closeModal} aria-label="Fermer">
           ×
         </button>
 
         <header className="auth-modal__header">
-          <img
-            className="auth-modal__logo"
-            src="/logo.png"
-            alt="Plateforme musicale"
-          />
+          <img className="auth-modal__logo" src="/logo.png" alt="" />
           <div className="auth-modal__header-copy">
             <p className="auth-modal__brand">Votre chanson personnalisée</p>
-            <h1 id="auth-modal-title">
-              {loggedIn ? 'Bienvenue' : mode === 'login' ? 'Connexion' : 'Inscription'}
-            </h1>
-            <p className="auth-modal__subtitle">
-              {loggedIn
-                ? 'Vous êtes déjà connecté. Retrouvez votre profil et vos créations dans Play.'
-                : mode === 'login'
-                  ? 'Connectez-vous pour retrouver vos chansons, les réécouter et les offrir.'
-                  : 'Compte gratuit : sauvegardez vos créations et gardez-les privées, sans abonnement.'}
-            </p>
+            <h1 id="auth-modal-title">{title}</h1>
+            <p className="auth-modal__subtitle">{subtitle}</p>
           </div>
         </header>
 
         {loggedIn ? (
           <div className="auth-modal__success">
-            <a href="/profil" className="auth-modal__btn auth-modal__btn--primary">
-              Ouvrir mon profil
+            <a href={MUSIC_ROUTES.space} className="auth-modal__btn auth-modal__btn--primary">
+              Ouvrir mon espace
             </a>
-            <button
-              type="button"
-              className="auth-modal__btn auth-modal__btn--ghost"
-              onClick={closeModal}
-            >
-              Annuler
+            <button type="button" className="auth-modal__btn auth-modal__btn--ghost" onClick={closeModal}>
+              Retour à l’accueil
             </button>
           </div>
-        ) : (
-          <>
-            <div className="auth-modal__tabs" role="tablist" aria-label="Mode d'authentification">
+        ) : step === 'phone' ? (
+          <form className="auth-modal__form" onSubmit={onSubmitPhone} noValidate>
+            <label>
+              Numéro de téléphone
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                autoFocus
+                value={phoneInput}
+                onChange={(event) => setPhoneInput(event.target.value)}
+                placeholder="+225 07 07 07 07 07"
+              />
+            </label>
+            <p className="auth-modal__hint">
+              Avec l’indicatif du pays. Sans indicatif, un numéro à 10 chiffres est considéré comme ivoirien (+225).
+            </p>
+            {message ? (
+              <p className="auth-modal__message" role="alert">
+                {message}
+              </p>
+            ) : null}
+            <div className="auth-modal__actions">
               <button
-                type="button"
-                role="tab"
-                aria-selected={mode === 'login'}
-                className={`auth-modal__tab${mode === 'login' ? ' auth-modal__tab--active' : ''}`}
-                onClick={() => {
-                  setMode('login')
-                  setMessage('')
-                  setLoginCaptchaChecked(false)
-                  setRegisterCaptchaChecked(false)
-                  syncAuthUrl('login')
-                }}
+                type="submit"
+                className="auth-modal__btn auth-modal__btn--primary"
+                disabled={loading || phoneInput.trim().length < 8}
               >
-                Connexion
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === 'register'}
-                className={`auth-modal__tab${mode === 'register' ? ' auth-modal__tab--active' : ''}`}
-                onClick={() => {
-                  setMode('register')
-                  setMessage('')
-                  setLoginCaptchaChecked(false)
-                  setRegisterCaptchaChecked(false)
-                  syncAuthUrl('register')
-                }}
-              >
-                Inscription
+                {loading ? 'Envoi…' : 'Recevoir le code'}
               </button>
             </div>
-
-            {mode === 'register' ? (
-              <form
-                className="auth-modal__form auth-modal__form--register"
-                onSubmit={async (event) => {
-                  event.preventDefault()
-                  if (!registerCaptchaChecked) {
-                    setMessage('Veuillez confirmer que vous n\'êtes pas un robot.')
-                    return
-                  }
-                  const fd = new FormData(event.currentTarget)
-                  const fullName = String(fd.get('fullName') ?? '')
-                  const email = String(fd.get('email') ?? '').trim().toLowerCase()
-                  const password = String(fd.get('password') ?? '')
-                  const confirm = String(fd.get('confirmPassword') ?? '')
-
-                  if (password.length < 8) {
-                    setMessage('Le mot de passe doit contenir au moins 8 caractères.')
-                    return
-                  }
-                  if (password !== confirm) {
-                    setMessage('Les mots de passe ne correspondent pas.')
-                    return
-                  }
-
-                  const { firstName, lastName } = splitFullName(fullName)
-                  setLoading(true)
-                  setMessage('')
-                  try {
-                    const res = await authApi.register({
-                      email,
-                      password,
-                      firstName: firstName || null,
-                      lastName: lastName || null,
-                    })
-                    if (!res.data?.accessToken) {
-                      setMessage(res.message || 'Inscription impossible.')
-                      return
-                    }
-                    setAuthSession({
-                      accessToken: res.data.accessToken,
-                      refreshToken: res.data.refreshToken,
-                      user: {
-                        email: res.data.user?.email ?? email,
-                        firstName: res.data.user?.firstName ?? firstName,
-                        lastName: res.data.user?.lastName ?? lastName,
-                        id: res.data.user?.id,
-                        phoneNumber: res.data.user?.phoneNumber ?? undefined,
-                        profileImage: res.data.user?.profileImage ?? undefined,
-                        studentProfileId: res.data.user?.studentProfileId ?? undefined,
-                        bio:
-                          typeof res.data.user?.bio === 'string'
-                            ? res.data.user.bio
-                            : undefined,
-                        city: res.data.user?.city ?? undefined,
-                        country: res.data.user?.country ?? undefined,
-                        address: res.data.user?.address ?? undefined,
-                        gender: res.data.user?.gender ?? undefined,
-                        nationality: res.data.user?.nationality ?? undefined,
-                        dateOfBirth: res.data.user?.dateOfBirth ?? undefined,
-                        academicLevel: res.data.user?.academicLevel ?? undefined,
-                      },
-                    })
-                    window.location.href = '/mon-espace'
-                  } catch (error) {
-                    setMessage(
-                      ApiHttpError.isInstance(error)
-                        ? error.message
-                        : 'Impossible de créer le compte. Vérifiez que l’API d’authentification est configurée.',
-                    )
-                  } finally {
-                    setLoading(false)
-                  }
-                }}
+          </form>
+        ) : (
+          <form className="auth-modal__form" onSubmit={onSubmitCode} noValidate>
+            <input
+              ref={codeRef}
+              className="auth-modal__code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={8}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+              placeholder="••••"
+              aria-label="Code de vérification"
+            />
+            {message ? (
+              <p className="auth-modal__message" role="alert">
+                {message}
+              </p>
+            ) : null}
+            <div className="auth-modal__actions">
+              <button
+                type="submit"
+                className="auth-modal__btn auth-modal__btn--primary"
+                disabled={loading || code.length < 4}
               >
-                <label>
-                  Nom complet
-                  <input
-                    name="fullName"
-                    required
-                    autoComplete="name"
-                    placeholder="Ex : Aminata Koné"
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="vous@email.com"
-                  />
-                </label>
-                <label>
-                  Mot de passe
-                  <PasswordInput
-                    name="password"
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    placeholder="••••••••"
-                  />
-                </label>
-                <label>
-                  Confirmer le mot de passe
-                  <PasswordInput
-                    name="confirmPassword"
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    placeholder="••••••••"
-                  />
-                </label>
-                <CaptchaField
-                  checked={registerCaptchaChecked}
-                  onChange={setRegisterCaptchaChecked}
-                  disabled={loading}
-                />
-                {message ? <p className="auth-modal__message">{message}</p> : null}
-                <div className="auth-modal__actions">
-                  <button
-                    type="button"
-                    className="auth-modal__btn auth-modal__btn--ghost"
-                    onClick={closeModal}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="auth-modal__btn auth-modal__btn--primary"
-                    disabled={loading || !registerCaptchaChecked}
-                  >
-                    {loading ? 'Création…' : 'Créer mon compte'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form
-                className="auth-modal__form auth-modal__form--login"
-                onSubmit={async (event) => {
-                  event.preventDefault()
-                  if (!loginCaptchaChecked) {
-                    setMessage('Veuillez confirmer que vous n\'êtes pas un robot.')
-                    return
-                  }
-                  const fd = new FormData(event.currentTarget)
-                  const email = String(fd.get('email') ?? '').trim().toLowerCase()
-                  const password = String(fd.get('password') ?? '')
-                  setLoading(true)
-                  setMessage('')
-                  try {
-                    const res = await authApi.login({ email, password })
-                    if (!res.data?.accessToken) {
-                      setMessage(res.message || 'Identifiants invalides.')
-                      return
-                    }
-                    setAuthSession({
-                      accessToken: res.data.accessToken,
-                      refreshToken: res.data.refreshToken,
-                      user: {
-                        email: res.data.user?.email ?? email,
-                        firstName: res.data.user?.firstName ?? undefined,
-                        lastName: res.data.user?.lastName ?? undefined,
-                        id: res.data.user?.id,
-                        phoneNumber: res.data.user?.phoneNumber ?? undefined,
-                        profileImage: res.data.user?.profileImage ?? undefined,
-                        studentProfileId: res.data.user?.studentProfileId ?? undefined,
-                        bio:
-                          typeof res.data.user?.bio === 'string'
-                            ? res.data.user.bio
-                            : undefined,
-                        city: res.data.user?.city ?? undefined,
-                        country: res.data.user?.country ?? undefined,
-                        address: res.data.user?.address ?? undefined,
-                        gender: res.data.user?.gender ?? undefined,
-                        nationality: res.data.user?.nationality ?? undefined,
-                        dateOfBirth: res.data.user?.dateOfBirth ?? undefined,
-                        academicLevel: res.data.user?.academicLevel ?? undefined,
-                      },
-                    })
-                    window.location.href = '/mon-espace'
-                  } catch (error) {
-                    setMessage(
-                      ApiHttpError.isInstance(error)
-                        ? error.message
-                        : 'Identifiants invalides. Vérifiez que l’API d’authentification est configurée.',
-                    )
-                  } finally {
-                    setLoading(false)
-                  }
-                }}
-              >
-                <label>
-                  Email
-                  <input
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    placeholder="vous@email.com"
-                  />
-                </label>
-                <label>
-                  Mot de passe
-                  <PasswordInput
-                    name="password"
-                    required
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                  />
-                </label>
-                <CaptchaField
-                  checked={loginCaptchaChecked}
-                  onChange={setLoginCaptchaChecked}
-                  disabled={loading}
-                />
-                {message ? <p className="auth-modal__message">{message}</p> : null}
-                <div className="auth-modal__actions">
-                  <button
-                    type="button"
-                    className="auth-modal__btn auth-modal__btn--ghost"
-                    onClick={closeModal}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="auth-modal__btn auth-modal__btn--primary"
-                    disabled={loading || !loginCaptchaChecked}
-                  >
-                    {loading ? 'Connexion…' : 'Se connecter'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </>
+                {loading ? 'Vérification…' : 'Valider'}
+              </button>
+            </div>
+          </form>
         )}
       </div>
     </div>

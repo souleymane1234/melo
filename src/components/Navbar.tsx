@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { FaUser } from 'react-icons/fa6'
-import { getAuthEventName, isCandidateLoggedIn, logoutCandidate } from '../lib/candidate-auth'
-import { clearAuthSession, isApiLoggedIn } from '../lib/auth-session'
+import { getAuthEventName, isCandidateLoggedIn } from '../lib/candidate-auth'
+import { isApiLoggedIn } from '../lib/auth-session'
 import { MUSIC_ROUTES } from '../lib/music-routes'
+import { logout } from '../services/api-client'
 import './Navbar.css'
 
 const SCROLL_SOLID_THRESHOLD_PX = 32
@@ -111,9 +112,9 @@ export function Navbar() {
                 className="site-navbar__link site-navbar__link--logout"
                 onClick={() => {
                   setMenuOpen(false)
-                  clearAuthSession()
-                  logoutCandidate()
-                  window.location.href = '/'
+                  void logout().finally(() => {
+                    window.location.href = '/'
+                  })
                 }}
               >
                 Déconnexion

@@ -4,6 +4,7 @@ import { useTrackQuery } from '../hooks/use-music-queries'
 import { getLocalTrack, getReceivedTrack, saveReceivedTrack } from '../lib/music-library'
 import { genreLabel, moodLabel } from '../lib/music-options'
 import { MUSIC_ROUTES } from '../lib/music-routes'
+import { trackStatusText } from '../lib/song-delivery'
 import { AudioPlayer } from './AudioPlayer'
 import { EmptyState } from './EmptyState'
 import { PageLoader } from './PageLoader'
@@ -19,7 +20,7 @@ export function SongDetailPage({ id }: { id?: string }) {
   )
   const remote = useTrackQuery(ownTrack || storedReceived ? undefined : resolvedId)
   const track = ownTrack ?? storedReceived ?? remote.data ?? null
-  const isOwner = Boolean(ownTrack)
+  const isOwner = Boolean(ownTrack) || Boolean(remote.data?.prompt)
 
   useEffect(() => {
     if (!isOwner && track?.audioUrl && track.status === 'completed') {
@@ -99,13 +100,19 @@ export function SongDetailPage({ id }: { id?: string }) {
           </blockquote>
         ) : null}
 
-        <AudioPlayer track={track} />
+        {track.audioUrl ? (
+          <AudioPlayer track={track} />
+        ) : (
+          <p className="song-detail__status ui-card">{trackStatusText(track)}</p>
+        )}
 
         <div className="song-detail__actions">
-          <a className="ui-btn ui-btn--primary" href={track.audioUrl} download>
-            <FaDownload aria-hidden="true" />
-            Télécharger la chanson
-          </a>
+          {track.audioUrl ? (
+            <a className="ui-btn ui-btn--primary" href={track.audioUrl} download>
+              <FaDownload aria-hidden="true" />
+              Télécharger la chanson
+            </a>
+          ) : null}
           {!isOwner ? (
             <a className="ui-btn ui-btn--ghost" href={MUSIC_ROUTES.generate}>
               Offrir une chanson à mon tour
@@ -113,7 +120,7 @@ export function SongDetailPage({ id }: { id?: string }) {
           ) : null}
         </div>
 
-        {isOwner ? (
+        {isOwner && track.audioUrl ? (
           <section className="song-detail__panel ui-card">
             <h2>Envoyer le lien</h2>
             <SongDelivery track={track} />

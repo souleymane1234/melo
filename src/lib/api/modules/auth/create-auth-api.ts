@@ -1,17 +1,19 @@
 import type { HttpClient } from '../../ports/http-client.port'
 import { AUTH_API_PATHS, type AuthApiPaths } from './auth.paths'
 import type {
-  AuthEnvelopeDto,
-  LoginBodyDto,
+  PhoneSendCodeBodyDto,
+  PhoneSendCodeEnvelopeDto,
+  PhoneVerifyCodeBodyDto,
+  PhoneVerifyCodeEnvelopeDto,
   RefreshBodyDto,
   RefreshEnvelopeDto,
-  RegisterBodyDto,
 } from './auth.types'
 
 export interface AuthApi {
-  login(body: LoginBodyDto): Promise<AuthEnvelopeDto>
-  register(body: RegisterBodyDto): Promise<AuthEnvelopeDto>
+  sendPhoneCode(body: PhoneSendCodeBodyDto): Promise<PhoneSendCodeEnvelopeDto>
+  verifyPhoneCode(body: PhoneVerifyCodeBodyDto): Promise<PhoneVerifyCodeEnvelopeDto>
   refresh(body: RefreshBodyDto): Promise<RefreshEnvelopeDto>
+  logout(body: RefreshBodyDto): Promise<unknown>
 }
 
 export function createAuthApi(
@@ -19,17 +21,17 @@ export function createAuthApi(
   paths: AuthApiPaths = AUTH_API_PATHS,
 ): AuthApi {
   return {
-    login(body) {
-      return http.request<AuthEnvelopeDto>({
+    sendPhoneCode(body) {
+      return http.request<PhoneSendCodeEnvelopeDto>({
         method: 'POST',
-        path: paths.login,
+        path: paths.phoneSendCode,
         body,
       })
     },
-    register(body) {
-      return http.request<AuthEnvelopeDto>({
+    verifyPhoneCode(body) {
+      return http.request<PhoneVerifyCodeEnvelopeDto>({
         method: 'POST',
-        path: paths.register,
+        path: paths.phoneVerifyCode,
         body,
       })
     },
@@ -37,6 +39,13 @@ export function createAuthApi(
       return http.request<RefreshEnvelopeDto>({
         method: 'POST',
         path: paths.refresh,
+        body,
+      })
+    },
+    logout(body) {
+      return http.request<unknown>({
+        method: 'POST',
+        path: paths.logout,
         body,
       })
     },

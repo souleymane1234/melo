@@ -81,8 +81,8 @@ const FAQS = [
     a: 'Dans Mon espace : les chansons que vous avez créées et envoyées, celles qu’on vous a offertes, et votre compte.',
   },
   {
-    q: 'En combien de temps vais-je recevoir ma chanson ?',
-    a: 'Dès que le moteur a terminé la composition. Ce n’est pas une commande artisanale à J+4 : le lecteur n’apparaît que lorsqu’un fichier audio réel est produit.',
+    q: 'En combien de temps la chanson est-elle envoyée ?',
+    a: 'Sous 72 heures après votre demande. Dès qu’elle est prête, la personne reçoit le lien par SMS ou e-mail, et vous la retrouvez dans Mon espace.',
   },
   {
     q: 'Est-ce payant ?',
@@ -229,7 +229,7 @@ export function HomeLanding() {
           <ul className="landing-occasions__list">
             {SONG_OCCASIONS.map((item) => (
               <li key={item.label}>
-                <a href={occasionHref(item.prompt)}>
+                <a href={occasionHref(item.code)}>
                   <span aria-hidden="true">{item.emoji}</span>
                   {item.label}
                 </a>
